@@ -1,0 +1,18 @@
+{
+    "categories": {
+        "Incident Type": [
+            "corruption"
+        ],
+        "Priority": [
+            "critical",
+            "high",
+            "medium",
+            "urgent"
+        ],
+        "System": [
+            "storage",
+            "security",
+            "infrastructure"
+        ]
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "incident_codes": {
+        "INC-2025-002": "Network connectivity issue",
+        "INC-2025-003": "Database failure",
+        "INC-2025-004": "Security breach",
+        "INC-2025-005": "Application error",
+        "15": "high cpu"
+    }
+}

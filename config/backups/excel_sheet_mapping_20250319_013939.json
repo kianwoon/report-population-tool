@@ -1,0 +1,36 @@
+{
+    "incidents": {
+        "sheet_name": "Incidents",
+        "columns": {
+            "description": "Description",
+            "status": "Status",
+            "priority": "Priority",
+            "system": "System",
+            "resolution": "Resolution"
+        }
+    },
+    "contacts": {
+        "sheet_name": "Contacts",
+        "columns": {
+            "company": "Company",
+            "name": "Contact Name",
+            "email": "Email",
+            "phone": "Phone",
+            "role": "Role"
+        }
+    },
+    "statistics": {
+        "sheet_name": "Statistics",
+        "columns": {
+            "month": "Month",
+            "year": "Year",
+            "total_incidents": "Total Incidents",
+            "resolved": "Resolved",
+            "ongoing": "Ongoing",
+            "critical": "Critical",
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low"
+        }
+    }
+}

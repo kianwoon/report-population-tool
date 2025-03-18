@@ -1,0 +1,33 @@
+{
+    "incidents": {
+        "sheet_name": "Incidents",
+        "columns": {}
+    },
+    "contacts": {
+        "sheet_name": "Contacts",
+        "columns": {}
+    },
+    "statistics": {
+        "sheet_name": "Statistics",
+        "columns": {}
+    },
+    "email_mappings": {
+        "sheet_name": "Email Data",
+        "columns": {
+            "Date Received": "A",
+            "Body": "B"
+        }
+    },
+    "company_mappings": {
+        "sheet_name": "Companies",
+        "columns": {
+            "Name": "E"
+        }
+    },
+    "incident_mappings": {
+        "sheet_name": "Incidents",
+        "columns": {
+            "Code": "F"
+        }
+    }
+}

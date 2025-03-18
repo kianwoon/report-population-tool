@@ -1,0 +1,40 @@
+{
+    "categories": {
+        "Incident Type": [
+            "breach",
+            "failure",
+            "error",
+            "disruption",
+            "malfunction",
+            "crash",
+            "corruption"
+        ],
+        "Priority": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "urgent",
+            "normal"
+        ],
+        "Status": [
+            "resolved",
+            "ongoing",
+            "investigating",
+            "mitigated",
+            "contained",
+            "escalated",
+            "pending"
+        ],
+        "System": [
+            "network",
+            "database",
+            "server",
+            "application",
+            "storage",
+            "security",
+            "infrastructure",
+            "cloud"
+        ]
+    }
+}

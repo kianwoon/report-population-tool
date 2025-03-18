@@ -1,0 +1,28 @@
+{
+    "incidents": {
+        "sheet_name": "Incidents",
+        "columns": {}
+    },
+    "contacts": {
+        "sheet_name": "Contacts",
+        "columns": {
+            "company": "Company",
+            "phone": "Phone",
+            "role": "Role"
+        }
+    },
+    "statistics": {
+        "sheet_name": "Statistics",
+        "columns": {
+            "month": "Month",
+            "year": "Year",
+            "total_incidents": "Total Incidents",
+            "resolved": "Resolved",
+            "ongoing": "Ongoing",
+            "critical": "Critical",
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low"
+        }
+    }
+}

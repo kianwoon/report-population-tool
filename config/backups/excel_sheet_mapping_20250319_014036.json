@@ -1,0 +1,24 @@
+{
+    "incidents": {
+        "sheet_name": "Incidents",
+        "columns": {}
+    },
+    "contacts": {
+        "sheet_name": "Contacts",
+        "columns": {
+            "company": "Company"
+        }
+    },
+    "statistics": {
+        "sheet_name": "Statistics",
+        "columns": {
+            "low": "Low"
+        }
+    },
+    "email_mappings": {
+        "sheet_name": "Email Data",
+        "columns": {
+            "Date Received": "A"
+        }
+    }
+}

@@ -1,0 +1,12 @@
+{
+    "categories": {
+        "Incident Type": [
+            "corruption"
+        ],
+        "System": [
+            "storage",
+            "security",
+            "infrastructure"
+        ]
+    }
+}

@@ -1,0 +1,28 @@
+{
+    "categories": {
+        "Incident Type": [
+            "corruption"
+        ],
+        "Priority": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "urgent",
+            "normal"
+        ],
+        "Status": [
+            "resolved",
+            "ongoing",
+            "investigating",
+            "mitigated",
+            "contained",
+            "escalated"
+        ],
+        "System": [
+            "storage",
+            "security",
+            "infrastructure"
+        ]
+    }
+}

@@ -1,0 +1,10 @@
+{
+    "categories": {
+        "System": [
+            "infrastructure"
+        ],
+        "Status": [
+            "high cpu"
+        ]
+    }
+}

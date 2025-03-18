@@ -1,0 +1,20 @@
+{
+    "incidents": {
+        "sheet_name": "Incidents",
+        "columns": {}
+    },
+    "contacts": {
+        "sheet_name": "Contacts",
+        "columns": {
+            "company": "Company"
+        }
+    },
+    "statistics": {
+        "sheet_name": "Statistics",
+        "columns": {
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low"
+        }
+    }
+}
