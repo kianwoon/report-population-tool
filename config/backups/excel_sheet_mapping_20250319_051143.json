@@ -7,17 +7,5 @@
             "Date Received": "A",
             "Body": "B"
         }
-    },
-    "company_mappings": {
-        "sheet_name": "Companies",
-        "columns": {
-            "Name": "E"
-        }
-    },
-    "incident_mappings": {
-        "sheet_name": "Incidents",
-        "columns": {
-            "Code": "F"
-        }
     }
 }

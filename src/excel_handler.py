@@ -9,149 +9,224 @@ including loading data, appending new data, and saving changes.
 
 import os
 import logging
-import shutil
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Union, Tuple
+from typing import Dict, List, Any, Optional, Tuple
 import pandas as pd
 
 # Logger setup
 logger = logging.getLogger(__name__)
 
 class ExcelHandler:
-    """
-    Class for handling Excel file operations.
-    """
-    
-    def __init__(self, excel_path: str, sheet_mapping: Dict[str, Any]):
+    def __init__(self, excel_config: Dict[str, Any], populate_config: Dict[str, Any]):
         """
-        Initialize the Excel handler.
+        Initialize Excel handler with separate configs for file path and data population.
         
         Args:
-            excel_path: Path to the Excel file
-            sheet_mapping: Dictionary mapping data types to sheet names and columns
+            excel_config: Configuration containing file path and selected sheet
+            populate_config: Configuration containing column mappings for data population
         """
-        self.excel_path = excel_path
-        self.sheet_mapping = sheet_mapping
+        self.excel_path = excel_config.get('file_path')
+        self.selected_sheet = excel_config.get('selected_sheet', 'Sheet1')
+        self.populate_config = populate_config
+        self.sheet_mapping = populate_config  # Initialize sheet_mapping from populate_config
+        self._excel_file = None
         self._dataframes = {}
         
-        # Check if the Excel file exists
-        self._file_exists = os.path.exists(excel_path)
-        logger.info(f"Excel handler initialized for {excel_path}")
-    
+        # Check if Excel file exists
+        if self.excel_path and os.path.exists(self.excel_path):
+            logger.info(f"Excel file found at {self.excel_path}")
+        else:
+            logger.warning(f"Excel file not found at {self.excel_path}")
+        
+    def close(self):
+        """Close any open Excel file handles."""
+        if self._excel_file is not None:
+            self._excel_file.close()
+            self._excel_file = None
+            logger.debug("Closed Excel file")
+            
+    def __del__(self):
+        """Ensure Excel file is closed when object is destroyed."""
+        self.close()
+        
     def load_excel(self) -> bool:
         """
-        Load the Excel file into memory.
+        Load Excel file and verify it exists.
         
         Returns:
-            True if successful, False otherwise
+            bool: True if successful, False otherwise
         """
-        # If file doesn't exist, create a new one with empty sheets
-        if not self._file_exists:
-            logger.warning(f"Excel file does not exist: {self.excel_path}")
-            return self._create_new_excel()
+        # Close any existing file handle
+        self.close()
         
-        try:
-            # Create a backup before loading
-            self._create_backup()
-            
-            # Load each sheet defined in the mapping
-            excel_file = pd.ExcelFile(self.excel_path)
-            
-            for data_type, mapping in self.sheet_mapping.items():
-                sheet_name = mapping.get('sheet_name')
-                if sheet_name in excel_file.sheet_names:
-                    self._dataframes[data_type] = pd.read_excel(
-                        excel_file, 
-                        sheet_name=sheet_name
-                    )
-                    logger.debug(f"Loaded sheet {sheet_name} for {data_type}")
-                else:
-                    # Create empty DataFrame with the correct columns
-                    column_mapping = mapping.get('columns', {})
-                    self._dataframes[data_type] = pd.DataFrame(columns=column_mapping.values())
-                    logger.warning(f"Sheet {sheet_name} not found in Excel file, created empty DataFrame")
-            
-            return True
-        except Exception as e:
-            logger.error(f"Error loading Excel file: {str(e)}")
+        if not self.excel_path or not os.path.exists(self.excel_path):
+            logger.error(f"Excel file not found: {self.excel_path}")
             return False
-    
-    def _create_new_excel(self) -> bool:
-        """
-        Create a new Excel file with empty sheets.
-        
-        Returns:
-            True if successful, False otherwise
-        """
+            
         try:
-            # Create empty DataFrames for each sheet
-            for data_type, mapping in self.sheet_mapping.items():
-                column_mapping = mapping.get('columns', {})
-                self._dataframes[data_type] = pd.DataFrame(columns=column_mapping.values())
-            
-            # Save the empty Excel file
-            self._file_exists = self.save_excel()
-            
-            if self._file_exists:
-                logger.info(f"Created new Excel file: {self.excel_path}")
-                return True
-            else:
-                logger.error(f"Failed to create new Excel file: {self.excel_path}")
+            try:
+                # Try to open the file to check if it's locked
+                with open(self.excel_path, 'rb') as f:
+                    # Try to read the Excel file directly
+                    self._excel_file = pd.ExcelFile(self.excel_path, engine='openpyxl')
+            except PermissionError:
+                logger.error(f"Cannot access Excel file: File is open in another program")
                 return False
+            except OSError as e:
+                if "being used by another process" in str(e):
+                    logger.error(f"Cannot access Excel file: File is open in another program")
+                    return False
+                raise
+                
+            logger.info(f"Successfully loaded Excel file")
+            return True
+            
         except Exception as e:
-            logger.error(f"Error creating new Excel file: {str(e)}")
+            logger.error(f"Error reading Excel file: {str(e)}")
             return False
-    
-    def _create_backup(self) -> bool:
+            
+    def get_sheet_preview(self, sheet_name: Optional[str] = None, num_rows: int = 5) -> List[List[Any]]:
         """
-        Create a backup of the Excel file.
+        Get a preview of the last n rows from a sheet.
         
+        Args:
+            sheet_name: Name of the sheet to preview (defaults to selected_sheet)
+            num_rows: Number of rows to preview (default: 5)
+            
         Returns:
-            True if successful, False otherwise
+            List of lists containing the header row and the last n rows of data
         """
-        if not self._file_exists:
+        sheet_name = sheet_name or self.selected_sheet
+        
+        try:
+            # Simple check for file existence
+            if not self.excel_path or not os.path.exists(self.excel_path):
+                logger.warning(f"Excel file not found: {self.excel_path}")
+                return None
+            
+            try:
+                # Try to open the file to check if it's locked
+                with open(self.excel_path, 'rb') as f:
+                    # Read the sheet directly using openpyxl engine
+                    logger.info(f"Reading sheet '{sheet_name}' from {self.excel_path}")
+                    df = pd.read_excel(self.excel_path, sheet_name=sheet_name, engine='openpyxl')
+            except PermissionError:
+                logger.error(f"Cannot access Excel file: File is open in another program")
+                return None
+            except OSError as e:
+                if "being used by another process" in str(e):
+                    logger.error(f"Cannot access Excel file: File is open in another program")
+                    return None
+                raise
+            
+            if df.empty:
+                logger.warning(f"Sheet '{sheet_name}' is empty")
+                return None
+            
+            # Get the header row and the last n rows
+            header = df.columns.tolist()
+            
+            # Get the last n rows, or all rows if there are fewer than n
+            if len(df) <= num_rows:
+                rows = df.values.tolist()
+            else:
+                rows = df.tail(num_rows).values.tolist()
+            
+            logger.info(f"Successfully read {len(rows)} rows from sheet '{sheet_name}'")
+            return [header] + rows
+            
+        except Exception as e:
+            logger.error(f"Error reading sheet '{sheet_name}': {str(e)}")
+            return None
+            
+    def populate_data(self, data_type: str, data: List[List[Any]]) -> bool:
+        """
+        Populate data to Excel based on the populate_config mapping.
+        
+        Args:
+            data_type: Type of data to populate (must match a key in populate_config)
+            data: List of lists containing the data to populate
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.excel_path:
+            logger.error("Excel file path not set")
+            return False
+            
+        if data_type not in self.populate_config:
+            logger.error(f"Invalid data type: {data_type}")
             return False
             
         try:
-            # Create a backup directory if it doesn't exist
-            backup_dir = os.path.join(os.path.dirname(self.excel_path), 'backups')
-            os.makedirs(backup_dir, exist_ok=True)
-            
-            # Create a backup with timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = os.path.basename(self.excel_path)
-            name, ext = os.path.splitext(filename)
-            backup_path = os.path.join(backup_dir, f"{name}_{timestamp}{ext}")
-            
-            shutil.copy2(self.excel_path, backup_path)
-            logger.debug(f"Created backup: {backup_path}")
-            return True
+            # Try to open the file to check if it's locked
+            try:
+                with open(self.excel_path, 'rb+') as f:  # rb+ mode for read and write
+                    # File is accessible, proceed with population
+                    data_config = self.populate_config[data_type]
+                    sheet_name = data_config.get('sheet_name', self.selected_sheet)
+                    column_mapping = data_config.get('columns', {})
+                    
+                    # Read existing Excel file or create new one if doesn't exist
+                    try:
+                        excel_file = pd.ExcelFile(self.excel_path, engine='openpyxl')
+                        existing_df = pd.read_excel(excel_file, sheet_name=sheet_name, engine='openpyxl')
+                    except FileNotFoundError:
+                        existing_df = pd.DataFrame()
+                    
+                    # Convert data to DataFrame with proper column mapping
+                    new_data = {}
+                    for field, column in column_mapping.items():
+                        if field in data[0]:  # Check if field exists in header row
+                            field_index = data[0].index(field)
+                            new_data[column] = [row[field_index] for row in data[1:]]
+                    
+                    new_df = pd.DataFrame(new_data)
+                    
+                    # Combine existing and new data
+                    final_df = pd.concat([existing_df, new_df], ignore_index=True)
+                    
+                    # Write back to Excel
+                    with pd.ExcelWriter(self.excel_path, engine='openpyxl', mode='a' if os.path.exists(self.excel_path) else 'w') as writer:
+                        final_df.to_excel(writer, sheet_name=sheet_name, index=False)
+                    
+                    logger.info(f"Successfully populated {len(data)-1} rows to sheet '{sheet_name}'")
+                    return True
+                    
+            except PermissionError:
+                logger.error(f"Cannot access Excel file: File is open in another program")
+                return False
+            except OSError as e:
+                if "being used by another process" in str(e):
+                    logger.error(f"Cannot access Excel file: File is open in another program")
+                    return False
+                raise
+                
         except Exception as e:
-            logger.error(f"Error creating backup: {str(e)}")
+            logger.error(f"Error populating data: {str(e)}")
             return False
-    
+
     def append_data(self, data_type: str, data: Dict[str, Any]) -> bool:
         """
         Append data to the specified sheet.
         
         Args:
-            data_type: Type of data to append (must be in sheet_mapping)
+            data_type: Type of data to append (must be in populate_config)
             data: Dictionary of data to append
             
         Returns:
             True if successful, False otherwise
         """
-        if data_type not in self.sheet_mapping:
+        if data_type not in self.populate_config:
             logger.error(f"Unknown data type: {data_type}")
             return False
         
-        mapping = self.sheet_mapping[data_type]
-        sheet_name = mapping.get('sheet_name')
+        mapping = self.populate_config[data_type]
+        sheet_name = mapping.get('sheet_name', self.selected_sheet)
         column_mapping = mapping.get('columns', {})
         
         # Create a new dataframe for this sheet if it doesn't exist
-        if data_type not in self._dataframes:
-            self._dataframes[data_type] = pd.DataFrame(columns=column_mapping.values())
+        if sheet_name not in self._dataframes:
+            self._dataframes[sheet_name] = pd.DataFrame(columns=column_mapping.values())
         
         # Validate the data before appending
         valid_data, row_data = self._validate_and_format_data(data_type, data)
@@ -160,8 +235,8 @@ class ExcelHandler:
             return False
         
         # Append the data
-        self._dataframes[data_type] = pd.concat([
-            self._dataframes[data_type], 
+        self._dataframes[sheet_name] = pd.concat([
+            self._dataframes[sheet_name], 
             pd.DataFrame([row_data])
         ], ignore_index=True)
         
@@ -179,10 +254,10 @@ class ExcelHandler:
         Returns:
             Tuple of (is_valid, formatted_data)
         """
-        if data_type not in self.sheet_mapping:
+        if data_type not in self.populate_config:
             return False, {}
         
-        mapping = self.sheet_mapping[data_type]
+        mapping = self.populate_config[data_type]
         column_mapping = mapping.get('columns', {})
         
         # Map the data to the correct columns
@@ -194,64 +269,6 @@ class ExcelHandler:
         # For example, check required fields, data types, etc.
         
         return True, row_data
-    
-    def save_excel(self) -> bool:
-        """
-        Save changes to the Excel file.
-        
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(self.excel_path), exist_ok=True)
-            
-            with pd.ExcelWriter(self.excel_path, engine='openpyxl') as writer:
-                for data_type, df in self._dataframes.items():
-                    sheet_name = self.sheet_mapping[data_type]['sheet_name']
-                    df.to_excel(writer, sheet_name=sheet_name, index=False)
-                    
-                    # Apply formatting if needed
-                    self._apply_excel_formatting(writer, data_type)
-            
-            self._file_exists = True
-            logger.info(f"Saved changes to Excel file: {self.excel_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Error saving Excel file: {str(e)}")
-            return False
-    
-    def _apply_excel_formatting(self, writer: pd.ExcelWriter, data_type: str) -> None:
-        """
-        Apply formatting to the Excel sheet.
-        
-        Args:
-            writer: Excel writer object
-            data_type: Type of data being written
-        """
-        try:
-            # This is a placeholder for Excel formatting
-            # In a real implementation, this would apply formatting
-            # such as column widths, cell styles, etc.
-            pass
-        except Exception as e:
-            logger.warning(f"Error applying Excel formatting: {str(e)}")
-    
-    def get_sheet_data(self, data_type: str) -> Optional[pd.DataFrame]:
-        """
-        Get the data for a specific sheet.
-        
-        Args:
-            data_type: Type of data to retrieve
-            
-        Returns:
-            DataFrame containing the sheet data or None if not found
-        """
-        if data_type in self._dataframes:
-            return self._dataframes[data_type]
-        
-        logger.warning(f"No data loaded for {data_type}")
-        return None
     
     def update_row(self, data_type: str, row_index: int, data: Dict[str, Any]) -> bool:
         """
@@ -265,16 +282,22 @@ class ExcelHandler:
         Returns:
             True if successful, False otherwise
         """
-        if data_type not in self._dataframes:
-            logger.error(f"No data loaded for {data_type}")
+        if data_type not in self.populate_config:
+            logger.error(f"Unknown data type: {data_type}")
             return False
         
-        df = self._dataframes[data_type]
+        mapping = self.populate_config[data_type]
+        sheet_name = mapping.get('sheet_name', self.selected_sheet)
+        
+        if sheet_name not in self._dataframes:
+            logger.error(f"No data loaded for {sheet_name}")
+            return False
+        
+        df = self._dataframes[sheet_name]
         if row_index < 0 or row_index >= len(df):
             logger.error(f"Invalid row index: {row_index}")
             return False
         
-        mapping = self.sheet_mapping[data_type]
         column_mapping = mapping.get('columns', {})
         
         # Update the row
@@ -282,7 +305,7 @@ class ExcelHandler:
             if field in data and column in df.columns:
                 df.at[row_index, column] = data[field]
         
-        logger.debug(f"Updated row {row_index} in {data_type}")
+        logger.debug(f"Updated row {row_index} in {sheet_name}")
         return True
     
     def search_data(self, data_type: str, search_criteria: Dict[str, Any]) -> List[int]:
@@ -296,12 +319,18 @@ class ExcelHandler:
         Returns:
             List of row indices matching the criteria
         """
-        if data_type not in self._dataframes:
-            logger.error(f"No data loaded for {data_type}")
+        if data_type not in self.populate_config:
+            logger.error(f"Unknown data type: {data_type}")
             return []
         
-        df = self._dataframes[data_type]
-        mapping = self.sheet_mapping[data_type]
+        mapping = self.populate_config[data_type]
+        sheet_name = mapping.get('sheet_name', self.selected_sheet)
+        
+        if sheet_name not in self._dataframes:
+            logger.error(f"No data loaded for {sheet_name}")
+            return []
+        
+        df = self._dataframes[sheet_name]
         column_mapping = mapping.get('columns', {})
         
         # Build the query
@@ -313,7 +342,7 @@ class ExcelHandler:
         
         # Get matching row indices
         matching_indices = df[mask].index.tolist()
-        logger.debug(f"Found {len(matching_indices)} matching rows in {data_type}")
+        logger.debug(f"Found {len(matching_indices)} matching rows in {sheet_name}")
         return matching_indices
     
     def delete_row(self, data_type: str, row_index: int) -> bool:
@@ -327,19 +356,26 @@ class ExcelHandler:
         Returns:
             True if successful, False otherwise
         """
-        if data_type not in self._dataframes:
-            logger.error(f"No data loaded for {data_type}")
+        if data_type not in self.populate_config:
+            logger.error(f"Unknown data type: {data_type}")
             return False
         
-        df = self._dataframes[data_type]
+        mapping = self.populate_config[data_type]
+        sheet_name = mapping.get('sheet_name', self.selected_sheet)
+        
+        if sheet_name not in self._dataframes:
+            logger.error(f"No data loaded for {sheet_name}")
+            return False
+        
+        df = self._dataframes[sheet_name]
         if row_index < 0 or row_index >= len(df):
             logger.error(f"Invalid row index: {row_index}")
             return False
         
         # Delete the row
-        self._dataframes[data_type] = df.drop(row_index).reset_index(drop=True)
+        self._dataframes[sheet_name] = df.drop(row_index).reset_index(drop=True)
         
-        logger.debug(f"Deleted row {row_index} from {data_type}")
+        logger.debug(f"Deleted row {row_index} from {sheet_name}")
         return True
     
     def get_column_names(self, data_type: str) -> List[str]:
@@ -352,11 +388,11 @@ class ExcelHandler:
         Returns:
             List of column names
         """
-        if data_type not in self.sheet_mapping:
+        if data_type not in self.populate_config:
             logger.error(f"Unknown data type: {data_type}")
             return []
         
-        mapping = self.sheet_mapping[data_type]
+        mapping = self.populate_config[data_type]
         column_mapping = mapping.get('columns', {})
         
         return list(column_mapping.values())
@@ -371,11 +407,66 @@ class ExcelHandler:
         Returns:
             List of field names
         """
-        if data_type not in self.sheet_mapping:
+        if data_type not in self.populate_config:
             logger.error(f"Unknown data type: {data_type}")
             return []
         
-        mapping = self.sheet_mapping[data_type]
+        mapping = self.populate_config[data_type]
         column_mapping = mapping.get('columns', {})
         
         return list(column_mapping.keys())
+    
+    def save_excel(self) -> bool:
+        """
+        Save the Excel file.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Save each DataFrame to the Excel file
+            with pd.ExcelWriter(self.excel_path, engine='openpyxl') as writer:
+                for sheet_name, df in self._dataframes.items():
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+                    
+            logger.info(f"Successfully saved Excel file: {self.excel_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving Excel file: {str(e)}")
+            return False
+
+    @staticmethod
+    def get_excel_sheet_info(excel_path: str) -> Dict[str, int]:
+        """
+        Get information about sheets in an Excel file.
+        
+        Args:
+            excel_path: Path to the Excel file
+            
+        Returns:
+            Dictionary mapping sheet names to row counts
+        """
+        sheet_info = {}
+        
+        try:
+            if not os.path.exists(excel_path):
+                logger.warning(f"Excel file does not exist: {excel_path}")
+                return sheet_info
+            
+            # Load Excel file
+            # Explicitly use openpyxl engine for .xlsx files
+            excel_file = pd.ExcelFile(excel_path, engine='openpyxl')
+            
+            # Get sheet names and row counts
+            for sheet_name in excel_file.sheet_names:
+                # Read the sheet to get row count
+                # Explicitly use openpyxl engine for .xlsx files
+                df = pd.read_excel(excel_file, sheet_name=sheet_name, engine='openpyxl')
+                sheet_info[sheet_name] = len(df)
+                
+            logger.debug(f"Found {len(sheet_info)} sheets in {excel_path}")
+            return sheet_info
+        except Exception as e:
+            logger.error(f"Error getting Excel sheet info: {str(e)}")
+            return sheet_info

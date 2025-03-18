@@ -1,0 +1,22 @@
+{
+    "email_field": {
+        "sheet_name": "Sheet1",
+        "columns": {
+            "Date Received": "A",
+            "Body": "B",
+            "Subject": "C"
+        }
+    },
+    "company": {
+        "sheet_name": "Sheet1",
+        "columns": {
+            "Name": "E"
+        }
+    },
+    "incident_code": {
+        "sheet_name": "Sheet1",
+        "columns": {
+            "Code": "F"
+        }
+    }
+}

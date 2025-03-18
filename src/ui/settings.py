@@ -9,15 +9,16 @@ different aspects of the application.
 
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+
 from PyQt6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel, QLineEdit, QFormLayout, QListWidget,
-    QListWidgetItem, QMessageBox, QFileDialog, QGroupBox,
-    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
-    QDialogButtonBox
+    QMessageBox, QGroupBox, QComboBox, QTableWidget, QTableWidgetItem,
+    QHeaderView, QFileDialog, QDialogButtonBox
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtGui import QIcon
 
 from src.json_admin import (
     load_json_config, save_json_config, add_company_name,
@@ -25,6 +26,7 @@ from src.json_admin import (
     remove_company_name, remove_incident_ref_code, remove_predefined_keyword,
     remove_keyword_category, remove_excel_mapping
 )
+from src.excel_handler import ExcelHandler
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -104,35 +106,29 @@ class SettingsDialog(QDialog):
         company_config = load_json_config(company_config_path) or {"companies": []}
         companies = company_config.get("companies", [])
         
-        # Create form for adding new company
-        form_group = QGroupBox("Add Company")
+        # Create form for setting company name
+        form_group = QGroupBox("Company Information")
         form_layout = QFormLayout(form_group)
         
         self.company_name_edit = QLineEdit()
+        # Set current company name if exists
+        if companies and len(companies) > 0:
+            self.company_name_edit.setText(companies[0])
+        
         form_layout.addRow("Company Name:", self.company_name_edit)
         
-        add_button = QPushButton("Add")
-        add_button.clicked.connect(self._on_add_company)
-        form_layout.addRow("", add_button)
+        # Add info label to clarify that only one company is allowed
+        info_label = QLabel("Note: Only one company name is allowed. Setting a new name will replace the existing one.")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666;")
+        form_layout.addRow("", info_label)
         
-        # Create list widget for existing companies
-        list_group = QGroupBox("Existing Companies")
-        list_layout = QVBoxLayout(list_group)
-        
-        self.company_list = QListWidget()
-        for company in companies:
-            self.company_list.addItem(company)
-        
-        list_layout.addWidget(self.company_list)
-        
-        # Add delete button
-        delete_button = QPushButton("Delete Selected")
-        delete_button.clicked.connect(self._on_delete_company)
-        list_layout.addWidget(delete_button)
+        save_button = QPushButton("Save Company")
+        save_button.clicked.connect(self._on_save_company)
+        form_layout.addRow("", save_button)
         
         # Add components to layout
         layout.addWidget(form_group)
-        layout.addWidget(list_group)
         
         # Add tab to tab widget
         self.tab_widget.addTab(tab, "Companies")
@@ -265,16 +261,55 @@ class SettingsDialog(QDialog):
         
         # Create form for Excel file selection
         file_group = QGroupBox("Excel File")
-        file_layout = QHBoxLayout(file_group)
+        file_layout = QVBoxLayout(file_group)
         
+        # Excel file path selection
+        file_path_layout = QHBoxLayout()
         self.excel_path_edit = QLineEdit()
         self.excel_path_edit.setReadOnly(True)
+        
+        # Load saved file path if available
+        saved_file_path = excel_config.get("file_path", "")
+        if saved_file_path and os.path.exists(saved_file_path):
+            self.excel_path_edit.setText(saved_file_path)
         
         browse_button = QPushButton("Browse")
         browse_button.clicked.connect(self._on_browse_excel)
         
-        file_layout.addWidget(self.excel_path_edit)
-        file_layout.addWidget(browse_button)
+        file_path_layout.addWidget(self.excel_path_edit)
+        file_path_layout.addWidget(browse_button)
+        file_layout.addLayout(file_path_layout)
+        
+        # Sheet selection and row count display
+        sheet_info_layout = QHBoxLayout()
+        
+        # Sheet selection dropdown
+        sheet_label = QLabel("Sheet:")
+        self.sheet_combo = QComboBox()
+        self.sheet_combo.currentIndexChanged.connect(self._on_sheet_selected)
+        
+        # Row count display
+        row_count_label = QLabel("Row Count:")
+        self.row_count_display = QLabel("0")
+        
+        sheet_info_layout.addWidget(sheet_label)
+        sheet_info_layout.addWidget(self.sheet_combo)
+        sheet_info_layout.addWidget(row_count_label)
+        sheet_info_layout.addWidget(self.row_count_display)
+        sheet_info_layout.addStretch()
+        
+        file_layout.addLayout(sheet_info_layout)
+        
+        # If we have a saved file path, load the sheet information
+        if saved_file_path and os.path.exists(saved_file_path):
+            self._load_excel_sheet_info(saved_file_path)
+            
+            # Select the previously selected sheet if available
+            saved_sheet = excel_config.get("selected_sheet", "")
+            if saved_sheet:
+                index = self.sheet_combo.findText(saved_sheet)
+                if index >= 0:
+                    self.sheet_combo.setCurrentIndex(index)
         
         # Create form for mapping configuration
         form_group = QGroupBox("Add/Edit Mapping")
@@ -390,31 +425,26 @@ class SettingsDialog(QDialog):
                 self.mapping_table.setItem(row, 2, QTableWidgetItem(column))
                 row += 1
     
-    def _on_data_type_changed(self, index):
+    def _on_data_type_changed(self, index: int) -> None:
         """
         Handle data type selection change.
         
         Args:
             index: Index of the selected data type
         """
-        # Clear the field dropdown
+        # Clear the field combo box
         self.field_combo.clear()
         
-        # Populate the field dropdown based on the selected data type
-        data_type = self.data_type_combo.currentText()
+        # Get the selected data type
+        data_type = self.data_type_combo.currentText().lower().replace(" ", "_")
         
-        if data_type == "Email Field":
-            # Add standard email fields
-            email_fields = ["Subject", "From", "To", "Cc", "Date Received", "Body"]
-            self.field_combo.addItems(email_fields)
-        elif data_type == "Company":
-            # Add company fields
-            company_fields = ["Name", "Contact", "Email", "Phone"]
-            self.field_combo.addItems(company_fields)
-        elif data_type == "Incident Code":
-            # Add incident code fields
-            incident_fields = ["Code", "Description", "Status", "Priority"]
-            self.field_combo.addItems(incident_fields)
+        # Set fields based on data type
+        if data_type == "email_field":
+            self.field_combo.addItems(["Date Received", "Body", "Subject"])
+        elif data_type == "company":
+            self.field_combo.addItems(["Name"])
+        elif data_type == "incident_code":
+            self.field_combo.addItems(["Code"])
     
     def _on_clear_excel_form(self) -> None:
         """
@@ -566,53 +596,27 @@ class SettingsDialog(QDialog):
             else:
                 QMessageBox.critical(self, "Error", "Failed to delete mapping.")
     
-    def _on_add_company(self) -> None:
+    def _on_save_company(self) -> None:
         """
-        Handle add company button click.
+        Handle save company button click.
         """
         company_name = self.company_name_edit.text().strip()
         if not company_name:
             QMessageBox.warning(self, "Warning", "Please enter a company name.")
             return
         
-        # Add to configuration
+        # Update configuration
         company_config_path = os.path.join(self.config_dir, "company_name.json")
-        if add_company_name(company_config_path, company_name):
-            # Add to list widget
-            self.company_list.addItem(company_name)
-            self.company_name_edit.clear()
-            logger.info(f"Added company: {company_name}")
+        company_config = load_json_config(company_config_path) or {"companies": []}
+        
+        # Replace existing company or create new list
+        company_config["companies"] = [company_name]
+        
+        if save_json_config(company_config_path, company_config):
+            QMessageBox.information(self, "Success", f"Company name set to '{company_name}'.")
+            logger.info(f"Company name set to: {company_name}")
         else:
-            QMessageBox.critical(self, "Error", "Failed to add company name.")
-    
-    def _on_delete_company(self) -> None:
-        """
-        Handle delete company button click.
-        """
-        selected_items = self.company_list.selectedItems()
-        if not selected_items:
-            QMessageBox.warning(self, "Warning", "Please select a company to delete.")
-            return
-        
-        # Confirm deletion
-        company_name = selected_items[0].text()
-        reply = QMessageBox.question(
-            self, 
-            "Confirm Deletion",
-            f"Are you sure you want to delete the company '{company_name}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            # Remove from configuration
-            company_config_path = os.path.join(self.config_dir, "company_name.json")
-            if remove_company_name(company_config_path, company_name):
-                # Remove from list widget
-                row = self.company_list.row(selected_items[0])
-                self.company_list.takeItem(row)
-                logger.info(f"Deleted company: {company_name}")
-            else:
-                QMessageBox.critical(self, "Error", "Failed to delete company name.")
+            QMessageBox.critical(self, "Error", "Failed to save company name.")
     
     def _on_add_incident(self) -> None:
         """
@@ -754,6 +758,76 @@ class SettingsDialog(QDialog):
         if file_path:
             self.excel_path_edit.setText(file_path)
             logger.info(f"Selected Excel file: {file_path}")
+            
+            # Save the file path to configuration
+            excel_config_path = os.path.join(self.config_dir, "excel_sheet_mapping.json")
+            excel_config = load_json_config(excel_config_path) or {}
+            excel_config["file_path"] = file_path
+            save_json_config(excel_config_path, excel_config)
+            logger.debug(f"Saved Excel file path: {file_path}")
+            
+            # Load sheet information
+            self._load_excel_sheet_info(file_path)
+    
+    def _load_excel_sheet_info(self, file_path: str) -> None:
+        """
+        Load sheet information from the selected Excel file.
+        
+        Args:
+            file_path: Path to the Excel file
+        """
+        # Clear previous sheet information
+        self.sheet_combo.clear()
+        self.row_count_display.setText("0")
+        
+        # Get sheet information using ExcelHandler
+        sheet_info = ExcelHandler.get_excel_sheet_info(file_path)
+        
+        if not sheet_info:
+            logger.warning("No sheets found in the Excel file")
+            QMessageBox.warning(self, "Warning", "No sheets found in the Excel file.")
+            return
+        
+        # Add sheets to the dropdown
+        for sheet_name in sheet_info.keys():
+            self.sheet_combo.addItem(sheet_name)
+        
+        # Select the first sheet
+        if self.sheet_combo.count() > 0:
+            self.sheet_combo.setCurrentIndex(0)
+            # This will trigger _on_sheet_selected
+    
+    def _on_sheet_selected(self, index: int) -> None:
+        """
+        Handle sheet selection change.
+        
+        Args:
+            index: Index of the selected sheet
+        """
+        if index < 0:
+            self.row_count_display.setText("0")
+            return
+        
+        sheet_name = self.sheet_combo.currentText()
+        file_path = self.excel_path_edit.text()
+        
+        if not file_path or not sheet_name:
+            return
+        
+        # Get sheet information
+        sheet_info = ExcelHandler.get_excel_sheet_info(file_path)
+        
+        if sheet_name in sheet_info:
+            row_count = sheet_info[sheet_name]
+            self.row_count_display.setText(str(row_count))
+            logger.debug(f"Selected sheet '{sheet_name}' with {row_count} rows")
+            
+            # Save the selected sheet to configuration
+            excel_config_path = os.path.join(self.config_dir, "excel_sheet_mapping.json")
+            excel_config = load_json_config(excel_config_path) or {}
+            excel_config["selected_sheet"] = sheet_name
+            save_json_config(excel_config_path, excel_config)
+            logger.debug(f"Saved selected sheet: {sheet_name}")
     
     def _on_mapping_selection_changed(self) -> None:
         """
@@ -768,16 +842,12 @@ class SettingsDialog(QDialog):
         Handle save button click without closing the dialog.
         """
         try:
-            # Save company names
-            companies = []
-            for i in range(self.company_list.count()):
-                company_item = self.company_list.item(i)
-                if company_item:
-                    companies.append(company_item.text())
-            
+            # Save company name
+            company_name = self.company_name_edit.text().strip()
             company_config_path = os.path.join(self.config_dir, "company_name.json")
-            company_config = {"companies": companies}
+            company_config = {"companies": [company_name] if company_name else []}
             save_json_config(company_config_path, company_config)
+            logger.info(f"Saved company name: {company_name}")
             
             # Save incident codes
             incident_codes = {}
@@ -805,6 +875,13 @@ class SettingsDialog(QDialog):
             keywords_config = {"categories": categories}
             keywords_config_path = os.path.join(self.config_dir, "pre_defined_keywords.json")
             save_json_config(keywords_config_path, keywords_config)
+            
+            # Save Excel file path and selected sheet
+            excel_config_path = os.path.join(self.config_dir, "excel_sheet_mapping.json")
+            excel_config = load_json_config(excel_config_path) or {}
+            excel_config["file_path"] = self.excel_path_edit.text()
+            excel_config["selected_sheet"] = self.sheet_combo.currentText()
+            save_json_config(excel_config_path, excel_config)
             
             # Show success message
             QMessageBox.information(self, "Success", "Settings saved successfully.")

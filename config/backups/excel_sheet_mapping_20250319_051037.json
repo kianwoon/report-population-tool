@@ -1,0 +1,10 @@
+{
+    "file_path": "/Users/kianwoonwong/Downloads/test.xlsx",
+    "selected_sheet": "Sheet1",
+    "email_mappings": {
+        "sheet_name": "Email Data",
+        "columns": {
+            "Date Received": "A"
+        }
+    }
+}

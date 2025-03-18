@@ -58,6 +58,15 @@ class EmailMonitor:
         """
         return self.running
     
+    def is_running(self) -> bool:
+        """
+        Check if the email monitor is running.
+        
+        Returns:
+            True if running, False otherwise
+        """
+        return self.is_monitoring()
+    
     def _connect_to_outlook(self) -> bool:
         """
         Connect to Outlook using the appropriate library based on platform.

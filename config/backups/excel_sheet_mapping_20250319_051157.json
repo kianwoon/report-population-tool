@@ -13,11 +13,5 @@
         "columns": {
             "Name": "E"
         }
-    },
-    "incident_mappings": {
-        "sheet_name": "Incidents",
-        "columns": {
-            "Code": "F"
-        }
     }
 }
